@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FGS — Ground Station</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg:       #0f1117;
+  --bg2:      #151820;
+  --bg3:      #1a1e28;
+  --card:     #181c26;
+  --card2:    #1e2330;
+  --border:   #252b3a;
+  --border2:  #2e3548;
+  --green:    #4dff91;
+  --green2:   #2ecc71;
+  --greend:   #1a4a2e;
+  --text:     #e4e8f0;
+  --muted:    #5a6478;
+  --muted2:   #7a8499;
+  --amber:    #f0b429;
+  --red:      #f05252;
+  --blue:     #5b9cf6;
+  --sky:      #3a7bd5;
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'IBM Plex Sans', sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;}
+
+/* ═══════════════════════════════ LAYOUT ═══════════════════════════════ */
+.shell{display:grid;grid-template-columns:120px 1fr 280px;height:100vh;overflow:hidden;}
+
+/* ═══════════════════════════════ SIDEBAR ═══════════════════════════════ */
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:0;overflow:hidden;}
+.sb-brand{width:100%;padding:16px 14px 14px;border-bottom:1px solid var(--border);}
+.sb-logo-box{display:flex;align-items:baseline;gap:3px;}
+.sb-logo-big{font-family:var(--sans);font-size:22px;font-weight:700;color:var(--text);letter-spacing:-1px;line-height:1;}
+.sb-logo-sub{font-size:8px;color:var(--muted);letter-spacing:2px;display:block;margin-top:2px;text-transform:uppercase;}
+.sb-nav{width:100%;flex:1;padding:8px 0;}
+.sb-item{width:100%;display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px;cursor:pointer;border-left:2px solid transparent;transition:all .15s;}
+.sb-item:hover{background:var(--bg3);}
+.sb-item.active{border-left-color:var(--green);background:var(--bg3);}
+.sb-item svg{width:20px;height:20px;stroke:var(--muted);fill:none;stroke-width:1.5;transition:stroke .15s;}
+.sb-item.active svg,.sb-item:hover svg{stroke:var(--text);}
+.sb-item span{font-size:9px;letter-spacing:.8px;color:var(--muted);text-transform:uppercase;font-weight:500;}
+.sb-item.active span{color:var(--text);}
+.sb-footer{width:100%;padding:12px 14px;border-top:1px solid var(--border);}
+.sb-lq-label{font-size:9px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px;}
+.sb-lq-bars{display:flex;gap:2px;align-items:flex-end;height:14px;margin-bottom:2px;}
+.sb-lq-bar{width:4px;background:var(--green);border-radius:1px;}
+.sb-lq-pct{font-family:var(--mono);font-size:12px;color:var(--text);font-weight:500;}
+.sb-time{font-family:var(--mono);font-size:11px;color:var(--muted2);margin-top:6px;line-height:1.5;}
+
+/* ═══════════════════════════════ CENTER ═══════════════════════════════ */
+.center{display:flex;flex-direction:column;overflow:hidden;}
+
+/* ── TOP HUD ── */
+.hud-wrap{position:relative;flex:0 0 420px;overflow:hidden;background:#0a0d10;}
+.hud-bg{position:absolute;inset:0;overflow:hidden;}
+/* Sky gradient */
+.hud-sky{position:absolute;inset:0;background:linear-gradient(180deg,#0d1a2e 0%,#1a3550 35%,#2a5070 50%,#3a6a55 55%,#2a4a20 65%,#1a2e10 80%,#0d1a08 100%);}
+/* Terrain silhouette */
+.hud-terrain{position:absolute;bottom:0;left:0;right:0;height:45%;background:linear-gradient(180deg,transparent 0%,#0d1a0a 40%,#080f05 100%);}
+
+/* Pitch/roll wrapper — rotates for bank */
+.hud-adi-rotate{position:absolute;inset:-100px;transition:transform .1s linear;transform-origin:center center;}
+.hud-horizon-line{position:absolute;top:50%;left:0;right:0;height:1px;background:rgba(255,255,255,.35);margin-top:0;transition:margin-top .1s linear;}
+/* pitch lines */
+.pitch-line{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:5px;pointer-events:none;}
+.pl-seg{height:1px;background:rgba(255,255,255,.4);}
+.pl-num{font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.5);width:18px;text-align:center;}
+
+/* ── HUD OVERLAYS (fixed, don't rotate) ── */
+.hud-overlay{position:absolute;inset:0;pointer-events:none;}
+
+/* Heading arc top */
+.hdg-arc-wrap{position:absolute;top:0;left:50%;transform:translateX(-50%);}
+.hdg-arc-canvas{display:block;}
+
+/* Aircraft reticle */
+.reticle{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:0;}
+.ret-wing{width:80px;height:1.5px;background:rgba(255,255,255,.9);}
+.ret-body{width:8px;height:8px;border:1.5px solid rgba(255,255,255,.9);border-radius:50%;margin:0 4px;}
+/* Pitch tape left */
+.pitch-tape{position:absolute;left:155px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:flex-end;gap:0;pointer-events:none;}
+.pt-row{display:flex;align-items:center;gap:4px;height:24px;}
+.pt-tick{height:1px;background:rgba(255,255,255,.3);}
+.pt-label{font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.45);width:20px;text-align:right;}
+/* Altitude tape right */
+.alt-tape{position:absolute;right:0;top:0;bottom:0;width:90px;display:flex;flex-direction:column;justify-content:space-around;align-items:flex-start;padding:10px 0 10px 8px;pointer-events:none;}
+.at-row{display:flex;align-items:center;gap:4px;}
+.at-tick{width:8px;height:1px;background:rgba(255,255,255,.25);}
+.at-label{font-family:var(--mono);font-size:9px;color:rgba(255,255,255,.4);}
+/* Altitude box */
+.alt-box{position:absolute;right:0;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.7);border:1px solid var(--green);border-right:none;padding:4px 10px 4px 8px;display:flex;flex-direction:column;align-items:flex-start;}
+.alt-box-val{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--green);line-height:1.1;}
+/* Speed boxes left */
+.speed-boxes{position:absolute;left:8px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;}
+.spd-box{background:rgba(12,16,24,.85);border:1px solid var(--border2);padding:6px 10px;min-width:110px;}
+.spd-box-label{font-size:8px;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;margin-bottom:1px;}
+.spd-box-val{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--text);line-height:1.1;}
+.spd-box-unit{font-size:9px;color:var(--muted);font-family:var(--mono);}
+/* HDG badge bottom center */
+.hdg-badge{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);border:1px solid var(--border2);border-radius:50%;width:72px;height:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.hdg-badge-label{font-size:8px;letter-spacing:1.5px;color:var(--muted2);text-transform:uppercase;}
+.hdg-badge-val{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text);}
+/* Top status bar */
+.hud-topbar{position:absolute;top:0;left:0;right:0;padding:8px 12px;display:flex;align-items:center;gap:10px;background:linear-gradient(180deg,rgba(0,0,0,.6) 0%,transparent 100%);pointer-events:all;}
+.status-pill{display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:3px;font-size:10px;font-weight:500;border:1px solid;}
+.pill-green{border-color:rgba(77,255,145,.35);color:var(--green);background:rgba(77,255,145,.08);}
+.pill-amber{border-color:rgba(240,180,41,.35);color:var(--amber);background:rgba(240,180,41,.08);}
+.hud-topbar-right{margin-left:auto;display:flex;align-items:center;gap:12px;}
+.signal-bars{display:flex;gap:2px;align-items:flex-end;height:14px;}
+.sig-bar{width:3px;background:var(--green);border-radius:1px;}
+.hud-timer{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.6);}
+
+/* ── BOTTOM PANELS ── */
+.bottom-row{display:grid;grid-template-columns:320px 1fr 1fr 240px;gap:8px;padding:8px;flex:1;overflow:hidden;background:var(--bg);}
+.bpanel{background:var(--card);border:1px solid var(--border);border-radius:4px;overflow:hidden;display:flex;flex-direction:column;}
+.bpanel-title{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);padding:8px 12px 6px;border-bottom:1px solid var(--border);font-weight:500;}
+
+/* MAP */
+.map-canvas-wrap{flex:1;position:relative;background:#0c1018;overflow:hidden;}
+canvas#map-canvas{position:absolute;inset:0;width:100%;height:100%;}
+.map-stats{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);}
+.map-stat{background:var(--card2);padding:7px 10px;}
+.ms-label{font-size:8px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;}
+.ms-val{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text);line-height:1.2;}
+.ms-unit{font-size:9px;color:var(--muted);font-family:var(--mono);}
+
+/* ATTITUDE IMU */
+.adi-mini-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:8px;}
+canvas#adi-mini{border-radius:6px;display:block;}
+.adi-mini-vals{display:flex;gap:16px;}
+.amv-item{text-align:center;}
+.amv-label{font-size:8px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;}
+.amv-val{font-family:var(--mono);font-size:14px;font-weight:600;}
+
+/* SENSOR DATA */
+.sensor-list{flex:1;padding:8px 10px;display:flex;flex-direction:column;gap:3px;overflow-y:auto;}
+.sd-row{display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:1px solid #1e2330;}
+.sd-key{font-size:10px;color:var(--muted2);}
+.sd-val{font-family:var(--mono);font-size:11px;color:var(--text);}
+.sd-val.green{color:var(--green);}
+.sd-val.amber{color:var(--amber);}
+
+/* COMPASS */
+.compass-inner{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:8px;}
+canvas#compass-mini{display:block;}
+.compass-hdg{font-family:var(--mono);font-size:18px;font-weight:600;color:var(--green);}
+
+/* ── SYSTEM LOG ── */
+.syslog-wrap{padding:8px;background:var(--bg);border-top:1px solid var(--border);}
+.syslog-title{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);font-weight:500;margin-bottom:6px;}
+.syslog-lines{font-family:var(--mono);font-size:10px;display:flex;flex-direction:column;gap:2px;height:72px;overflow-y:auto;}
+.log-line{display:flex;gap:8px;}
+.log-ts{color:var(--muted);}
+.log-level{color:var(--green);}
+.log-level.warn{color:var(--amber);}
+.log-level.err{color:var(--red);}
+.log-msg{color:var(--muted2);}
+
+/* ═══════════════════════════════ RIGHT PANEL ═══════════════════════════════ */
+.right-col{background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.rp-section{padding:14px 16px;border-bottom:1px solid var(--border);}
+.rp-label{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:8px;}
+.aircraft-name{font-size:20px;font-weight:700;color:var(--text);line-height:1.2;}
+.aircraft-tail{font-size:11px;color:var(--muted2);margin-top:2px;font-family:var(--mono);}
+
+/* Aircraft SVG image area */
+.ac-img{width:100%;height:110px;background:var(--bg3);border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-top:8px;}
+
+/* Mode / status rows */
+.rp-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+.rp-key{font-size:10px;color:var(--muted2);}
+.rp-val{font-size:10px;font-family:var(--mono);color:var(--text);}
+.rp-val.green{color:var(--green);}
+.rp-val.amber{color:var(--amber);}
+.rp-mode{font-size:14px;font-weight:600;color:var(--green);font-family:var(--mono);margin-top:2px;}
+.status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px;}
+.dot-green{background:var(--green);box-shadow:0 0 5px var(--green);}
+.dot-amber{background:var(--amber);box-shadow:0 0 5px var(--amber);}
+.dot-red{background:var(--red);}
+.dot-blink{animation:blink 1.5s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* Control surfaces */
+.cs-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px;}
+.cs-item{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.cs-label{font-size:8px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;}
+canvas.cs-canvas{display:block;border-radius:3px;}
+
+/* System info bars */
+.sysinfo-row{margin-bottom:6px;}
+.si-header{display:flex;justify-content:space-between;margin-bottom:3px;}
+.si-key{font-size:10px;color:var(--muted2);}
+.si-val{font-size:10px;font-family:var(--mono);color:var(--text);}
+.si-bar-bg{height:3px;background:var(--border2);border-radius:2px;overflow:hidden;}
+.si-bar-fill{height:100%;background:var(--green);border-radius:2px;transition:width .4s;}
+
+/* connect bar */
+.conn-bar{display:flex;gap:6px;align-items:center;padding:7px 16px;background:var(--bg3);border-bottom:1px solid var(--border);flex-shrink:0;}
+.cb-select,.cb-input{background:var(--card2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;font-family:var(--mono);font-size:10px;border-radius:3px;outline:none;}
+.cb-btn{padding:4px 12px;border-radius:3px;border:1px solid;font-family:var(--sans);font-size:10px;font-weight:600;cursor:pointer;transition:all .15s;letter-spacing:.3px;}
+.cb-connect{border-color:var(--green);color:var(--green);background:transparent;}
+.cb-connect:hover{background:var(--green);color:#000;}
+.cb-disc{border-color:var(--red);color:var(--red);background:transparent;display:none;}
+.cb-disc:hover{background:var(--red);color:#000;}
+.cb-demo{border-color:var(--blue);color:var(--blue);background:transparent;}
+.cb-demo:hover{background:var(--blue);color:#000;}
+.cb-status{margin-left:auto;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--muted);}
+
+/* scrollbar */
+::-webkit-scrollbar{width:3px;height:3px;}
+::-webkit-scrollbar-thumb{background:var(--border2);}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside class="sidebar">
+  <div class="sb-brand">
+    <div class="sb-logo-box"><span class="sb-logo-big">FGS</span></div>
+    <span class="sb-logo-sub">Ground Station</span>
+  </div>
+  <nav class="sb-nav">
+    <div class="sb-item active">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Dashboard</span>
+    </div>
+    <div class="sb-item">
+      <svg viewBox="0 0 24 24"><path d="M3 12h18M12 3v18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg>
+      <span>Map</span>
+    </div>
+    <div class="sb-item">
+      <svg viewBox="0 0 24 24"><path d="M9 20l-5.5-5.5 1.5-1.5L9 17l9.5-9.5 1.5 1.5z"/><circle cx="12" cy="12" r="9"/></svg>
+      <span>Flight Plan</span>
+    </div>
+    <div class="sb-item">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
+      <span>Telemetry</span>
+    </div>
+    <div class="sb-item">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      <span>Tuning</span>
+    </div>
+    <div class="sb-item">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      <span>Settings</span>
+    </div>
+    <div class="sb-item">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span>Logs</span>
+    </div>
+  </nav>
+  <div class="sb-footer">
+    <div class="sb-lq-label">Link Quality</div>
+    <div class="sb-lq-bars" id="sb-bars">
+      <div class="sb-lq-bar" style="height:4px"></div>
+      <div class="sb-lq-bar" style="height:6px"></div>
+      <div class="sb-lq-bar" style="height:9px"></div>
+      <div class="sb-lq-bar" style="height:11px"></div>
+      <div class="sb-lq-bar" style="height:13px"></div>
+    </div>
+    <div class="sb-lq-pct" id="sb-lq">87%</div>
+    <div class="sb-time" id="sb-time">--:--:--<br>Loading…</div>
+  </div>
+</aside>
+
+<!-- ═══ CENTER ═══ -->
+<div class="center">
+
+  <!-- CONNECT BAR -->
+  <div class="conn-bar">
+    <span style="font-size:9px;color:var(--muted);letter-spacing:1px">PORT</span>
+    <select class="cb-select" id="cb-baud"><option>115200</option><option>57600</option><option>9600</option></select>
+    <button class="cb-btn cb-connect" onclick="connectSerial()">Connect</button>
+    <button class="cb-btn cb-disc" id="cb-disc-btn" onclick="disconnectSerial()">Disconnect</button>
+    <button class="cb-btn cb-demo" id="cb-demo-btn" onclick="toggleDemo()">▶ Demo</button>
+    <div class="cb-status">
+      <span class="status-dot dot-red dot-blink" id="conn-dot"></span>
+      <span id="conn-txt">Offline</span>
+      <span style="color:var(--border2);margin:0 4px">|</span>
+      <span id="conn-pkts" style="color:var(--muted)">0 pkts</span>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div class="hud-wrap">
+    <!-- Background -->
+    <div class="hud-bg">
+      <div class="hud-sky"></div>
+      <div class="hud-terrain"></div>
+      <!-- trees silhouette -->
+      <svg style="position:absolute;bottom:0;left:0;width:100%;height:40%;opacity:.4" viewBox="0 0 1000 200" preserveAspectRatio="none">
+        <path d="M0,200 L0,120 Q50,60 100,100 Q120,40 140,80 Q170,20 200,70 Q230,10 260,60 Q290,30 320,75 Q360,15 400,65 Q440,5 480,55 Q520,20 560,65 Q600,10 640,60 Q680,25 720,70 Q760,15 800,65 Q840,30 880,75 Q920,40 960,80 Q980,60 1000,90 L1000,200Z" fill="#1a2e10"/>
+      </svg>
+    </div>
+
+    <!-- ADI rotate wrapper -->
+    <div class="hud-adi-rotate" id="adi-roll-outer">
+      <div id="adi-pitch-offset" style="position:absolute;inset:0;transition:margin-top .1s linear">
+        <div class="hud-horizon-line"></div>
+        <!-- Pitch ladder lines (generated by JS) -->
+        <div id="pitch-ladder"></div>
+      </div>
+    </div>
+
+    <!-- Fixed overlays -->
+    <div class="hud-overlay">
+      <!-- Heading arc -->
+      <div class="hdg-arc-wrap">
+        <canvas id="hdg-arc-canvas" width="440" height="70"></canvas>
+      </div>
+      <!-- Aircraft reticle -->
+      <div class="reticle">
+        <div class="ret-wing"></div>
+        <div class="ret-body"></div>
+        <div class="ret-wing"></div>
+      </div>
+      <!-- Pitch tape left -->
+      <div class="pitch-tape" id="pitch-tape-left"></div>
+      <!-- Speed boxes -->
+      <div class="speed-boxes">
+        <div class="spd-box">
+          <div class="spd-box-label">Airspeed</div>
+          <div class="spd-box-val" id="hud-spd">0.0</div>
+          <div class="spd-box-unit">m/s</div>
+        </div>
+        <div class="spd-box">
+          <div class="spd-box-label">Altitude</div>
+          <div class="spd-box-val" id="hud-alt2">0</div>
+          <div class="spd-box-unit">m</div>
+        </div>
+        <div class="spd-box">
+          <div class="spd-box-label">Vert Speed</div>
+          <div class="spd-box-val" id="hud-vspd">0.0</div>
+          <div class="spd-box-unit">m/s</div>
+        </div>
+      </div>
+      <!-- Alt tape -->
+      <div class="alt-tape" id="alt-tape-right"></div>
+      <!-- Alt box -->
+      <div class="alt-box">
+        <div style="font-size:8px;letter-spacing:1px;color:var(--green);opacity:.7">ALT</div>
+        <div class="alt-box-val" id="hud-alt-box">0</div>
+      </div>
+      <!-- Heading badge -->
+      <div class="hdg-badge">
+        <div class="hdg-badge-label">HDG</div>
+        <div class="hdg-badge-val" id="hud-hdg">360°</div>
+      </div>
+      <!-- Top status bar -->
+      <div class="hud-topbar">
+        <div class="status-pill pill-green"><span class="status-dot dot-green dot-blink"></span>Telemetry</div>
+        <div class="status-pill pill-green" id="imu-pill"><span class="status-dot dot-green"></span>IMU</div>
+        <div class="hud-topbar-right">
+          <div class="signal-bars">
+            <div class="sig-bar" style="height:4px"></div>
+            <div class="sig-bar" style="height:7px"></div>
+            <div class="sig-bar" style="height:10px"></div>
+            <div class="sig-bar" style="height:13px"></div>
+          </div>
+          <div class="hud-timer" id="hud-timer">00:00:00</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM ROW -->
+  <div class="bottom-row">
+
+    <!-- FLIGHT MAP -->
+    <div class="bpanel">
+      <div class="bpanel-title">Flight Map</div>
+      <div class="map-canvas-wrap"><canvas id="map-canvas"></canvas></div>
+      <div class="map-stats">
+        <div class="map-stat">
+          <div class="ms-label">Distance</div>
+          <div><span class="ms-val" id="map-dist">0.00</span><span class="ms-unit"> km</span></div>
+        </div>
+        <div class="map-stat">
+          <div class="ms-label">Home Dist</div>
+          <div><span class="ms-val" id="map-home">0.00</span><span class="ms-unit"> km</span></div>
+        </div>
+        <div class="map-stat" style="grid-column:1/-1">
+          <div class="ms-label">Waypoint</div>
+          <div><span class="ms-val" id="map-wp">1</span><span class="ms-unit"> / 3</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ATTITUDE IMU -->
+    <div class="bpanel">
+      <div class="bpanel-title">Attitude (IMU)</div>
+      <div class="adi-mini-wrap">
+        <canvas id="adi-mini" width="160" height="130"></canvas>
+        <div class="adi-mini-vals">
+          <div class="amv-item">
+            <div class="amv-label">Roll</div>
+            <div class="amv-val" id="amv-roll" style="color:#4dff91">0.0°</div>
+          </div>
+          <div class="amv-item">
+            <div class="amv-label">Pitch</div>
+            <div class="amv-val" id="amv-pitch" style="color:#f0b429">0.0°</div>
+          </div>
+          <div class="amv-item">
+            <div class="amv-label">Yaw</div>
+            <div class="amv-val" id="amv-yaw" style="color:#5b9cf6">0.0°</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SENSOR DATA -->
+    <div class="bpanel">
+      <div class="bpanel-title">Sensor Data</div>
+      <div class="sensor-list">
+        <div class="sd-row"><span class="sd-key">ROLL</span><span class="sd-val green" id="sd-roll">0.0°</span></div>
+        <div class="sd-row"><span class="sd-key">PITCH</span><span class="sd-val green" id="sd-pitch">0.0°</span></div>
+        <div class="sd-row"><span class="sd-key">YAW</span><span class="sd-val green" id="sd-yaw">0.0°</span></div>
+        <div class="sd-row"><span class="sd-key">ACCEL X</span><span class="sd-val" id="sd-ax">0.00 g</span></div>
+        <div class="sd-row"><span class="sd-key">ACCEL Y</span><span class="sd-val" id="sd-ay">0.00 g</span></div>
+        <div class="sd-row"><span class="sd-key">ACCEL Z</span><span class="sd-val" id="sd-az">1.00 g</span></div>
+        <div class="sd-row"><span class="sd-key">GYRO X</span><span class="sd-val" id="sd-gx">0.00 °/s</span></div>
+        <div class="sd-row"><span class="sd-key">GYRO Y</span><span class="sd-val" id="sd-gy">0.00 °/s</span></div>
+        <div class="sd-row"><span class="sd-key">GYRO Z</span><span class="sd-val" id="sd-gz">0.00 °/s</span></div>
+        <div class="sd-row"><span class="sd-key">ALTITUDE (BMP180)</span><span class="sd-val" id="sd-alt">0 m</span></div>
+        <div class="sd-row"><span class="sd-key">PRESSURE</span><span class="sd-val" id="sd-pres">101325 Pa</span></div>
+        <div class="sd-row"><span class="sd-key">TEMP (BMP180)</span><span class="sd-val amber" id="sd-temp">-- °C</span></div>
+      </div>
+    </div>
+
+    <!-- COMPASS -->
+    <div class="bpanel">
+      <div class="bpanel-title">Compass</div>
+      <div class="compass-inner">
+        <canvas id="compass-mini" width="140" height="140"></canvas>
+        <div class="compass-hdg" id="compass-hdg-val">045°</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SYSTEM LOG -->
+  <div class="syslog-wrap">
+    <div class="syslog-title">System Log</div>
+    <div class="syslog-lines" id="syslog"></div>
+  </div>
+
+</div>
+
+<!-- ═══ RIGHT PANEL ═══ -->
+<aside class="right-col">
+  <div class="rp-section">
+    <div class="rp-label">Aircraft</div>
+    <div class="aircraft-name">Fixed Wing RC Plane</div>
+    <div class="aircraft-tail">TAIL: FX-01</div>
+    <div class="ac-img">
+      <!-- Inline SVG fixed-wing plane illustration -->
+      <svg width="240" height="95" viewBox="0 0 240 95" fill="none">
+        <!-- fuselage -->
+        <path d="M60,48 Q100,38 180,46 Q200,47 220,50 L200,54 Q180,56 60,52Z" fill="#d0d4dc" stroke="#a0a8b8" stroke-width=".8"/>
+        <!-- nose cone -->
+        <path d="M60,48 Q40,48 20,50 L60,52Z" fill="#c0c4cc"/>
+        <!-- main wings -->
+        <path d="M110,46 Q130,20 180,10 Q190,8 192,12 Q185,22 140,42Z" fill="#e8eaf0" stroke="#b0b8c8" stroke-width=".8"/>
+        <path d="M110,52 Q130,75 180,88 Q190,90 192,86 Q185,76 140,56Z" fill="#e8eaf0" stroke="#b0b8c8" stroke-width=".8"/>
+        <!-- red stripe on wing -->
+        <path d="M116,44 Q135,22 175,13 Q178,12 180,14 Q160,24 120,46Z" fill="#e05252" opacity=".7"/>
+        <path d="M116,54 Q135,76 175,85 Q178,86 180,84 Q160,74 120,52Z" fill="#e05252" opacity=".7"/>
+        <!-- tail fin vertical -->
+        <path d="M188,48 Q210,30 218,28 Q220,30 216,38 L200,50Z" fill="#d0d4dc" stroke="#a0a8b8" stroke-width=".8"/>
+        <!-- tail horizontal left -->
+        <path d="M190,50 Q205,42 215,40 Q216,42 212,47 L195,52Z" fill="#d8dae0"/>
+        <!-- tail horizontal right -->
+        <path d="M190,50 Q205,58 215,60 Q216,58 212,53 L195,50Z" fill="#d8dae0"/>
+        <!-- cockpit glass -->
+        <ellipse cx="85" cy="47" rx="12" ry="5" fill="#6ab4d8" opacity=".7" stroke="#90c8e8" stroke-width=".5"/>
+        <!-- engine nacelle -->
+        <ellipse cx="105" cy="50" rx="6" ry="3.5" fill="#888" stroke="#666" stroke-width=".5"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="rp-section">
+    <div class="rp-label">Autopilot Mode</div>
+    <div class="rp-mode" id="rp-mode">MANUAL</div>
+    <div style="margin-top:8px">
+      <div class="rp-row"><span class="rp-key">IMU STATUS</span><span class="rp-val green"><span class="status-dot dot-green"></span>OK</span></div>
+      <div class="rp-row"><span class="rp-key">BMP180 STATUS</span><span class="rp-val green" id="bmp-status"><span class="status-dot dot-green"></span>OK</span></div>
+    </div>
+  </div>
+
+  <div class="rp-section" style="flex:0 0 auto">
+    <div class="rp-label">Control Surfaces</div>
+    <div class="cs-grid">
+      <div class="cs-item">
+        <div class="cs-label">SG90 — L.ELEVON</div>
+        <canvas class="cs-canvas" id="cs-ail" width="72" height="52"></canvas>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--green);margin-top:2px" id="sg90-val">90°</div>
+      </div>
+      <div class="cs-item">
+        <div class="cs-label">MG90 — R.ELEVON</div>
+        <canvas class="cs-canvas" id="cs-ele" width="72" height="52"></canvas>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--green);margin-top:2px" id="mg90-val">90°</div>
+      </div>
+      <div class="cs-item">
+        <div class="cs-label">PITCH MIX</div>
+        <canvas class="cs-canvas" id="cs-rud" width="72" height="52"></canvas>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted2);margin-top:2px" id="mix-val">0°</div>
+      </div>
+    </div>
+    <!-- Servo bar indicators -->
+    <div style="padding:6px 0 0;display:flex;flex-direction:column;gap:5px">
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+          <span style="font-size:9px;color:var(--muted)">SG90</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--text)" id="sg90-bar-val">90 µs</span>
+        </div>
+        <div style="height:4px;background:var(--border2);border-radius:2px;overflow:hidden">
+          <div id="sg90-bar" style="height:100%;background:var(--green);border-radius:2px;width:50%;transition:width .1s linear"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+          <span style="font-size:9px;color:var(--muted)">MG90</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--text)" id="mg90-bar-val">90 µs</span>
+        </div>
+        <div style="height:4px;background:var(--border2);border-radius:2px;overflow:hidden">
+          <div id="mg90-bar" style="height:100%;background:var(--blue);border-radius:2px;width:50%;transition:width .1s linear"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rp-section" style="flex:1">
+    <div class="rp-label">System Info</div>
+    <div class="sysinfo-row">
+      <div class="si-header"><span class="si-key">BATTERY</span><span class="si-val" id="si-batt">11.6 V &nbsp; 72%</span></div>
+      <div class="si-bar-bg"><div class="si-bar-fill" id="si-batt-bar" style="width:72%"></div></div>
+    </div>
+    <div class="sysinfo-row">
+      <div class="si-header"><span class="si-key">RSSI</span><span class="si-val" id="si-rssi">-62 dBm</span></div>
+      <div class="si-bar-bg"><div class="si-bar-fill" id="si-rssi-bar" style="width:68%"></div></div>
+    </div>
+    <div class="sysinfo-row">
+      <div class="si-header"><span class="si-key">CPU LOAD</span><span class="si-val" id="si-cpu">28%</span></div>
+      <div class="si-bar-bg"><div class="si-bar-fill" id="si-cpu-bar" style="width:28%"></div></div>
+    </div>
+    <div class="sysinfo-row">
+      <div class="si-header"><span class="si-key">UPTIME</span><span class="si-val" id="si-uptime">00:00:00</span></div>
+    </div>
+  </div>
+</aside>
+
+</div><!-- end shell -->
+
+<script>
+/* ═══════════════════════════════════════
+   STATE
+═══════════════════════════════════════ */
+const S = {
+  roll:0,pitch:0,yaw:0,
+  ax:0,ay:0,az:1,
+  gx:0,gy:0,gz:0,
+  alt:0,temp:25,pres:101325,vspd:0,
+  prevAlt:0,
+  channels:[1500,1500,1500,1500,1500,1500,1500,1500],
+  sg90:90, mg90:90,
+  connected:false,demo:false,
+  loopHz:0,pktCount:0,errCount:0,
+  loopLast:Date.now(),
+  flightStart:null,
+  dist:0,mapPath:[],mapHeading:0
+};
+
+/* ═══════════════════════════════════════
+   BUILD STATIC HUD ELEMENTS
+═══════════════════════════════════════ */
+// Pitch tape labels
+(()=>{
+  const tape = document.getElementById('pitch-tape-left');
+  tape.innerHTML = '';
+  for(let p=30;p>=-30;p-=10){
+    const row = document.createElement('div');
+    row.className='pt-row';
+    const len = p===0?40:p%20===0?30:20;
+    row.innerHTML=`<span class="pt-label" style="color:rgba(255,255,255,${p===0?.0:.4})">${p===0?'':p}</span><div class="pt-tick" style="width:${len}px"></div>`;
+    tape.appendChild(row);
+  }
+})();
+
+// Alt tape right
+(()=>{
+  const tape = document.getElementById('alt-tape-right');
+  tape.innerHTML='';
+  [1100,1000,900,800,700,600].forEach(v=>{
+    const row=document.createElement('div');
+    row.className='at-row';
+    row.innerHTML=`<div class="at-tick"></div><span class="at-label">${v}</span>`;
+    tape.appendChild(row);
+  });
+})();
+
+/* ═══════════════════════════════════════
+   HEADING ARC
+═══════════════════════════════════════ */
+function drawHdgArc(hdg){
+  const canvas=document.getElementById('hdg-arc-canvas');
+  const ctx=canvas.getContext('2d');
+  const w=440,h=70,cx=220,cy=h;
+  const R=200;
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle='rgba(255,255,255,.3)';
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.arc(cx,cy,R,-Math.PI,0);
+  ctx.stroke();
+  // ticks
+  for(let d=-60;d<=60;d+=5){
+    const isMain=d%30===0, isMed=d%15===0;
+    const angle=(d*Math.PI/180)-Math.PI/2;
+    const r1=R-2, r2=isMain?R-16:isMed?R-10:R-6;
+    const x1=cx+R*Math.cos(angle+(Math.PI/2)-Math.PI/2);
+    // compute position on arc from heading offset
+    const a=((d)*Math.PI/180);
+    const ax=cx+R*Math.sin(a), ay=cy-R*Math.cos(a);
+    const bx=cx+(r2/R*R)*Math.sin(a), by=cy-(r2/R*R)*Math.cos(a);
+    ctx.strokeStyle=isMain?'rgba(255,255,255,.55)':'rgba(255,255,255,.25)';
+    ctx.lineWidth=isMain?1.5:1;
+    ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+    if(isMain){
+      const deg=((hdg+d)+360)%360;
+      let label=deg%10===0?deg:'';
+      const cardinals={0:'N',90:'E',180:'S',270:'W'};
+      if(cardinals[deg]) label=cardinals[deg];
+      if(label!==''){
+        ctx.font=cardinals[deg]?'bold 11px IBM Plex Sans,sans-serif':'10px IBM Plex Mono,monospace';
+        ctx.fillStyle=cardinals[deg]==='N'?'#4dff91':'rgba(255,255,255,.55)';
+        ctx.textAlign='center'; ctx.textBaseline='top';
+        ctx.fillText(label, bx, by+3);
+      }
+    }
+  }
+  // center triangle
+  ctx.fillStyle='#4dff91';
+  ctx.beginPath(); ctx.moveTo(cx,4); ctx.lineTo(cx-5,14); ctx.lineTo(cx+5,14); ctx.closePath(); ctx.fill();
+}
+
+/* ═══════════════════════════════════════
+   ADI MINI (bottom panel)
+═══════════════════════════════════════ */
+function drawAdiMini(roll,pitch){
+  const canvas=document.getElementById('adi-mini');
+  const ctx=canvas.getContext('2d');
+  const w=160,h=130,cx=80,cy=65,r=58;
+  ctx.clearRect(0,0,w,h);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+  // rotate for roll
+  ctx.translate(cx,cy); ctx.rotate(roll*Math.PI/180); ctx.translate(-cx,-cy);
+  // pitch offset
+  const po=pitch*1.5;
+  // sky
+  const sg=ctx.createLinearGradient(0,cy-r+po,0,cy+po);
+  sg.addColorStop(0,'#0d2240'); sg.addColorStop(1,'#1a5090');
+  ctx.fillStyle=sg; ctx.fillRect(0,0,w,cy+po);
+  // ground
+  const gg=ctx.createLinearGradient(0,cy+po,0,h);
+  gg.addColorStop(0,'#7a4800'); gg.addColorStop(1,'#3a2000');
+  ctx.fillStyle=gg; ctx.fillRect(0,cy+po,w,h);
+  // horizon
+  ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(0,cy+po); ctx.lineTo(w,cy+po); ctx.stroke();
+  // pitch lines
+  [-20,-10,10,20].forEach(p=>{
+    const y=cy+po-p*1.5;
+    const len=p%20===0?40:26;
+    ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(cx-len/2,y); ctx.lineTo(cx+len/2,y); ctx.stroke();
+  });
+  ctx.restore();
+  // bank arc ticks
+  ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.lineWidth=1;
+  [-60,-45,-30,-20,-10,0,10,20,30,45,60].forEach(a=>{
+    const rad=(a-90)*Math.PI/180;
+    ctx.beginPath();
+    ctx.moveTo(cx+(r-3)*Math.cos(rad),cy+(r-3)*Math.sin(rad));
+    ctx.lineTo(cx+(r-9)*Math.cos(rad),cy+(r-9)*Math.sin(rad));
+    ctx.stroke();
+  });
+  // bank pointer
+  const bRad=(roll-90)*Math.PI/180;
+  ctx.fillStyle='rgba(255,255,255,.8)';
+  ctx.beginPath();
+  ctx.moveTo(cx+(r-3)*Math.cos(bRad),cy+(r-3)*Math.sin(bRad));
+  const l=8,pa=0.15;
+  ctx.lineTo(cx+(r-12)*Math.cos(bRad-pa),cy+(r-12)*Math.sin(bRad-pa));
+  ctx.lineTo(cx+(r-12)*Math.cos(bRad+pa),cy+(r-12)*Math.sin(bRad+pa));
+  ctx.closePath(); ctx.fill();
+  // aircraft symbol
+  ctx.strokeStyle='#ffee44'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(cx-30,cy); ctx.lineTo(cx-8,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+8,cy); ctx.lineTo(cx+30,cy); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx,cy,4,0,Math.PI*2);
+  ctx.strokeStyle='#ffee44'; ctx.stroke();
+  // outer ring
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.strokeStyle='#2e3548'; ctx.lineWidth=2; ctx.stroke();
+}
+
+/* ═══════════════════════════════════════
+   COMPASS MINI
+═══════════════════════════════════════ */
+function drawCompass(hdg){
+  const canvas=document.getElementById('compass-mini');
+  const ctx=canvas.getContext('2d');
+  const w=140,h=140,cx=70,cy=70,r=60;
+  ctx.clearRect(0,0,w,h);
+  // bg
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.fillStyle='#0f1117'; ctx.fill();
+  ctx.strokeStyle='#252b3a'; ctx.lineWidth=1.5; ctx.stroke();
+  // cardinal directions
+  const cards=[{l:'N',d:0,c:'#4dff91'},{l:'NE',d:45},{l:'E',d:90},{l:'SE',d:135},{l:'S',d:180},{l:'SW',d:225},{l:'W',d:270},{l:'NW',d:315}];
+  cards.forEach(({l,d,c})=>{
+    const a=((d-hdg)-90)*Math.PI/180;
+    const rr=d%90===0?r-12:r-16;
+    const x=cx+rr*Math.cos(a), y=cy+rr*Math.sin(a);
+    ctx.font=d%90===0?'bold 11px IBM Plex Sans,sans-serif':'8px IBM Plex Sans,sans-serif';
+    ctx.fillStyle=c||(d%90===0?'rgba(255,255,255,.7)':'rgba(255,255,255,.3)');
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(l,x,y);
+  });
+  // tick marks
+  for(let d=0;d<360;d+=10){
+    const a=((d-hdg)-90)*Math.PI/180;
+    const r1=r-4, r2=d%30===0?r-14:d%10===0?r-9:r-6;
+    ctx.beginPath();
+    ctx.moveTo(cx+r1*Math.cos(a),cy+r1*Math.sin(a));
+    ctx.lineTo(cx+r2*Math.cos(a),cy+r2*Math.sin(a));
+    ctx.strokeStyle=d%30===0?'rgba(255,255,255,.4)':'rgba(255,255,255,.15)';
+    ctx.lineWidth=d%30===0?1.5:1; ctx.stroke();
+  }
+  // north needle
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(-hdg*Math.PI/180);
+  ctx.fillStyle='#f05252';
+  ctx.beginPath(); ctx.moveTo(0,-(r-20)); ctx.lineTo(-5,0); ctx.lineTo(5,0); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.5)';
+  ctx.beginPath(); ctx.moveTo(0,r-20); ctx.lineTo(-5,0); ctx.lineTo(5,0); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  // center
+  ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2);
+  ctx.fillStyle='#1e2330'; ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.lineWidth=1.5; ctx.stroke();
+  // aircraft arrow
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate((S.yaw-hdg)*Math.PI/180);
+  ctx.fillStyle='#4dff91';
+  ctx.beginPath(); ctx.moveTo(0,-14); ctx.lineTo(-5,8); ctx.lineTo(0,4); ctx.lineTo(5,8); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+/* ═══════════════════════════════════════
+   CONTROL SURFACES
+═══════════════════════════════════════ */
+function drawControlSurface(id, deflection, type, posLabel){
+  const canvas=document.getElementById(id);
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  const w=72,h=52,cx=36,cy=26;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#1a1e28'; ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='#252b3a'; ctx.lineWidth=1;
+  ctx.strokeRect(.5,.5,w-1,h-1);
+  // center lines
+  ctx.strokeStyle='#2e3548'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(w,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,h); ctx.stroke();
+  // deflection indicator
+  const pct=deflection/500; // -1 to 1
+  if(type==='aileron'){
+    // left/right bar
+    const bw=Math.abs(pct)*(w/2-4);
+    ctx.fillStyle=deflection>0?'#4dff91':'#5b9cf6';
+    if(deflection>0) ctx.fillRect(cx,cy-3,bw,6);
+    else ctx.fillRect(cx-bw,cy-3,bw,6);
+  } else if(type==='elevator'){
+    // up/down bar
+    const bh=Math.abs(pct)*(h/2-4);
+    ctx.fillStyle=deflection>0?'#4dff91':'#5b9cf6';
+    if(deflection>0) ctx.fillRect(cx-3,cy,6,bh);
+    else ctx.fillRect(cx-3,cy-bh,6,bh);
+  } else {
+    // rudder
+    const bh=Math.abs(pct)*(h/2-4);
+    ctx.fillStyle='#4dff91';
+    if(deflection>0) ctx.fillRect(cx,cy-3,bh,6);
+    else ctx.fillRect(cx-bh,cy-3,bh,6);
+  }
+  // indicator dot
+  ctx.beginPath(); ctx.arc(cx,cy,3,0,Math.PI*2);
+  ctx.fillStyle='#4dff91'; ctx.fill();
+}
+
+/* ═══════════════════════════════════════
+   MAP
+═══════════════════════════════════════ */
+function drawMap(){
+  const canvas=document.getElementById('map-canvas');
+  if(!canvas) return;
+  const w=canvas.offsetWidth||320, h=canvas.offsetHeight||120;
+  canvas.width=w; canvas.height=h;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#0c1018'; ctx.fillRect(0,0,w,h);
+  // topo grid
+  ctx.strokeStyle='rgba(255,255,255,.04)'; ctx.lineWidth=1;
+  for(let i=0;i<w;i+=20){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,h); ctx.stroke(); }
+  for(let i=0;i<h;i+=20){ ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(w,i); ctx.stroke(); }
+  // flight path
+  if(S.mapPath.length>1){
+    ctx.strokeStyle='#4dff91'; ctx.lineWidth=1.5;
+    ctx.beginPath();
+    S.mapPath.forEach(([x,y],i)=>{ i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+    ctx.stroke();
+  }
+  // home marker
+  const hx=w/2, hy=h-20;
+  ctx.beginPath(); ctx.arc(hx,hy,5,0,Math.PI*2);
+  ctx.fillStyle='#4dff91'; ctx.fill();
+  ctx.font='8px IBM Plex Mono,monospace'; ctx.fillStyle='rgba(255,255,255,.5)';
+  ctx.textAlign='center'; ctx.fillText('HOME',hx,hy+14);
+  // plane icon
+  if(S.mapPath.length>0){
+    const [px,py]=S.mapPath[S.mapPath.length-1];
+    ctx.save(); ctx.translate(px,py); ctx.rotate(S.mapHeading*Math.PI/180);
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.moveTo(0,-7); ctx.lineTo(-5,5); ctx.lineTo(0,2); ctx.lineTo(5,5); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+}
+
+/* ═══════════════════════════════════════
+   MAIN HUD ADI BACKGROUND
+═══════════════════════════════════════ */
+function updateMainADI(roll, pitch){
+  const outer=document.getElementById('adi-roll-outer');
+  const pitchOff=document.getElementById('adi-pitch-offset');
+  outer.style.transform=`rotate(${roll}deg)`;
+  // pitch: 2px per degree
+  pitchOff.style.marginTop=(pitch*2.2)+'px';
+}
+
+/* ═══════════════════════════════════════
+   FULL UI UPDATE
+═══════════════════════════════════════ */
+let mapTimer=0;
+function updateUI(){
+  const s=S;
+
+  // Main HUD
+  updateMainADI(s.roll,s.pitch);
+  drawHdgArc(s.yaw);
+
+  const hdgDisp=((s.yaw%360)+360)%360;
+  document.getElementById('hud-hdg').textContent=hdgDisp.toFixed(0).padStart(3,'0')+'°';
+  document.getElementById('hud-alt-box').textContent=s.alt.toFixed(0);
+  document.getElementById('hud-alt2').textContent=s.alt.toFixed(0);
+  document.getElementById('hud-spd').textContent=(Math.sqrt(s.ax*s.ax+s.ay*s.ay)*9.81).toFixed(1);
+  const vsign=s.vspd>=0?'+':'';
+  document.getElementById('hud-vspd').textContent=vsign+s.vspd.toFixed(1);
+
+  // ADI mini
+  drawAdiMini(s.roll,s.pitch);
+  document.getElementById('amv-roll').textContent=s.roll.toFixed(1)+'°';
+  document.getElementById('amv-pitch').textContent=s.pitch.toFixed(1)+'°';
+  document.getElementById('amv-yaw').textContent=hdgDisp.toFixed(1)+'°';
+
+  // Sensor data
+  document.getElementById('sd-roll').textContent=s.roll.toFixed(1)+'°';
+  document.getElementById('sd-pitch').textContent=s.pitch.toFixed(1)+'°';
+  document.getElementById('sd-yaw').textContent=hdgDisp.toFixed(1)+'°';
+  document.getElementById('sd-ax').textContent=s.ax.toFixed(2)+' g';
+  document.getElementById('sd-ay').textContent=s.ay.toFixed(2)+' g';
+  document.getElementById('sd-az').textContent=s.az.toFixed(2)+' g';
+  document.getElementById('sd-gx').textContent=s.gx.toFixed(2)+' °/s';
+  document.getElementById('sd-gy').textContent=s.gy.toFixed(2)+' °/s';
+  document.getElementById('sd-gz').textContent=s.gz.toFixed(2)+' °/s';
+  document.getElementById('sd-alt').textContent=s.alt.toFixed(1)+' m';
+  document.getElementById('sd-pres').textContent=(s.pres).toFixed(0)+' Pa';
+  document.getElementById('sd-temp').textContent=s.temp.toFixed(1)+' °C';
+
+  // Compass
+  drawCompass(hdgDisp);
+  document.getElementById('compass-hdg-val').textContent=hdgDisp.toFixed(0).padStart(3,'0')+'°';
+
+  // Control surfaces: aileron=roll, elevator=pitch, rudder=yaw
+  // Real servo positions from Arduino (sg90=left elevon, mg90=right elevon)
+  const sg90Defl = s.sg90 - 90;  // offset from centre
+  const mg90Defl = s.mg90 - 90;
+  const pitchDefl = (sg90Defl + mg90Defl) / 2; // mixed pitch
+  drawControlSurface('cs-ail', sg90Defl, 'aileron', s.sg90);
+  drawControlSurface('cs-ele', mg90Defl, 'elevator', s.mg90);
+  drawControlSurface('cs-rud', pitchDefl, 'rudder', null);
+  // Degree labels
+  document.getElementById('sg90-val').textContent = s.sg90 + '°';
+  document.getElementById('mg90-val').textContent = s.mg90 + '°';
+  document.getElementById('mix-val').textContent  = pitchDefl.toFixed(1) + '°';
+  // Servo bars (0–180 mapped to 0–100%)
+  document.getElementById('sg90-bar').style.width = (s.sg90/180*100).toFixed(1)+'%';
+  document.getElementById('mg90-bar').style.width = (s.mg90/180*100).toFixed(1)+'%';
+  document.getElementById('sg90-bar-val').textContent = s.sg90 + '°';
+  document.getElementById('mg90-bar-val').textContent = s.mg90 + '°';
+
+  // Map path update
+  mapTimer++;
+  if(mapTimer%4===0){
+    const canvas=document.getElementById('map-canvas');
+    const w=canvas.offsetWidth||320, h=canvas.offsetHeight||120;
+    const hx=w/2, hy=h-20;
+    if(S.mapPath.length===0) S.mapPath.push([hx,hy]);
+    const last=S.mapPath[S.mapPath.length-1];
+    const hdRad=s.yaw*Math.PI/180;
+    const nx=last[0]+Math.sin(hdRad)*1.2, ny=last[1]-Math.cos(hdRad)*1.2;
+    S.mapPath.push([Math.max(5,Math.min(w-5,nx)),Math.max(5,Math.min(h-5,ny))]);
+    if(S.mapPath.length>200) S.mapPath.shift();
+    S.mapHeading=s.yaw;
+    // distance
+    S.dist+=0.0012;
+    document.getElementById('map-dist').textContent=S.dist.toFixed(2);
+    document.getElementById('map-home').textContent=(S.dist*.7).toFixed(2);
+  }
+  drawMap();
+
+  // Packet count
+  document.getElementById('conn-pkts').textContent=s.pktCount+' pkts';
+}
+
+/* ═══════════════════════════════════════
+   PARSE PACKET
+   Arduino Nano 33 BLE Rev2 + BMP180
+   Accepts JSON: {"roll":2.6,"pitch":1.8,"yaw":45.0,"altitude":885.0,
+                  "pressure":101325,"temperature":22.6,
+                  "accelX":0.02,"accelY":0.01,"accelZ":1.00,
+                  "gyroX":0.25,"gyroY":-0.12,"gyroZ":0.05,
+                  "magX":...,"magY":...,"magZ":...}
+   Also accepts legacy CSV for backwards compat.
+═══════════════════════════════════════ */
+function parsePacket(line){
+  line = line.trim();
+  if(!line) return false;
+
+  // ── JSON path (Arduino output) ──
+  if(line.startsWith('{')){
+    let d;
+    try{ d = JSON.parse(line); } catch(e){ S.errCount++; return false; }
+    const prev = S.alt;
+    S.roll  = d.roll        ?? S.roll;
+    S.pitch = d.pitch       ?? S.pitch;
+    S.yaw   = d.yaw         ?? S.yaw;
+    S.ax    = d.accelX      ?? S.ax;
+    S.ay    = d.accelY      ?? S.ay;
+    S.az    = d.accelZ      ?? S.az;
+    S.gx    = d.gyroX       ?? S.gx;
+    S.gy    = d.gyroY       ?? S.gy;
+    S.gz    = d.gyroZ       ?? S.gz;
+    S.alt   = d.altitude    ?? S.alt;
+    S.temp  = d.temperature ?? S.temp;
+    S.pres  = d.pressure    ?? S.pres;
+    // magnetometer (bonus — used for compass heading)
+    if(d.magX !== undefined){
+      const hdg = Math.atan2(d.magY, d.magX) * 180 / Math.PI;
+      S.yaw = hdg < 0 ? hdg + 360 : hdg;
+    }
+    S.sg90 = d.sg90 ?? S.sg90;
+    S.mg90 = d.mg90 ?? S.mg90;
+    S.vspd = (S.alt - prev) * 10;
+    const now = Date.now();
+    S.loopHz = 1000/(now - S.loopLast); S.loopLast = now; S.pktCount++;
+    return true;
+  }
+
+  // ── Legacy CSV path ──
+  const parts = line.split(',').map(Number);
+  if(parts.some(isNaN)||parts.length<12){ S.errCount++; return false; }
+  const prev = S.alt;
+  [S.roll,S.pitch,S.yaw,S.ax,S.ay,S.az,S.gx,S.gy,S.gz,S.alt,S.temp,S.pres] = parts;
+  S.vspd = (S.alt - prev) * 10;
+  const now = Date.now();
+  S.loopHz = 1000/(now - S.loopLast); S.loopLast = now; S.pktCount++;
+  return true;
+}
+
+/* ═══════════════════════════════════════
+   LOG
+═══════════════════════════════════════ */
+function syslog(msg,level='INFO'){
+  const el=document.getElementById('syslog');
+  const ts=new Date().toLocaleTimeString();
+  const div=document.createElement('div');
+  div.className='log-line';
+  const lvlCls=level==='WARN'?'warn':level==='ERR'?'err':'';
+  div.innerHTML=`<span class="log-ts">[${ts}]</span><span class="log-level ${lvlCls}">${level}</span><span class="log-msg">${msg}</span>`;
+  el.appendChild(div);
+  el.scrollTop=el.scrollHeight;
+  while(el.children.length>30) el.removeChild(el.firstChild);
+}
+
+/* ═══════════════════════════════════════
+   WEB SERIAL
+═══════════════════════════════════════ */
+let port=null,reader=null;
+async function connectSerial(){
+  if(!('serial' in navigator)){alert('Use Chrome/Edge for Web Serial. Try Demo mode first.');return;}
+  try{
+    const baud=parseInt(document.getElementById('cb-baud').value);
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:baud});
+    setOnline(true);
+    document.getElementById('cb-disc-btn').style.display='inline-block';
+    syslog('Serial connected at '+baud+' baud');
+    readLoop();
+  }catch(e){syslog('Connection failed: '+e.message,'ERR');}
+}
+async function readLoop(){
+  const dec=new TextDecoderStream();
+  port.readable.pipeTo(dec.writable);
+  reader=dec.readable.getReader();
+  let buf="";
+  try{
+    while(true){
+      const{value,done}=await reader.read();
+      if(done)break;
+      buf+=value;
+      let nl;
+      while((nl=buf.indexOf("\n"))!==-1){
+        const ln=buf.slice(0,nl).trim(); buf=buf.slice(nl+1);
+        if(!ln) continue;
+        if(ln.startsWith("{")){
+          if(parsePacket(ln)) updateUI();
+          else syslog("Bad JSON: "+ln.slice(0,60),"WARN");
+        } else {
+          syslog(ln);
+        }
+      }
+    }
+  }catch(e){syslog("Read error: "+e.message,"ERR");setOnline(false);}
+}
+async function disconnectSerial(){
+  if(reader){await reader.cancel();reader=null;}
+  if(port){await port.close();port=null;}
+  setOnline(false);
+  document.getElementById('cb-disc-btn').style.display='none';
+  syslog('Disconnected');
+}
+function setOnline(v){
+  S.connected=v;
+  const dot=document.getElementById('conn-dot');
+  dot.className='status-dot '+(v?'dot-green dot-blink':'dot-red dot-blink');
+  document.getElementById('conn-txt').textContent=v?'Online':'Offline';
+  if(v&&!S.flightStart){S.flightStart=Date.now();syslog('Flight timer started');}
+  if(!v&&!S.demo){S.flightStart=null;}
+}
+
+/* ═══════════════════════════════════════
+   DEMO
+═══════════════════════════════════════ */
+let demoInt=null,demoT=0;
+function toggleDemo(){
+  const btn=document.getElementById('cb-demo-btn');
+  if(demoInt){
+    clearInterval(demoInt);demoInt=null;S.demo=false;
+    setOnline(false);btn.textContent='▶ Demo';
+    syslog('Demo stopped');
+    return;
+  }
+  S.demo=true;setOnline(true);btn.textContent='⏹ Stop';
+  demoT=0;S.mapPath=[];S.dist=0;
+  syslog('Demo mode started — simulating fixed-wing flight');
+  syslog('IMU data stream active');
+  syslog('BMP180 data stream active');
+  syslog('All systems nominal');
+  demoInt=setInterval(()=>{
+    demoT+=0.04;
+    S.roll   = 28*Math.sin(demoT*.55)+6*Math.sin(demoT*1.4);
+    S.pitch  = 9*Math.sin(demoT*.32)+2.5*Math.cos(demoT*.8);
+    S.yaw    = (demoT*6.5)%360;
+    S.ax     = 0.1*Math.sin(demoT*2.1);
+    S.ay     = 0.08*Math.cos(demoT*1.7);
+    S.az     = 1+0.05*Math.sin(demoT*3.2);
+    S.gx     = S.roll*0.85+3*(Math.random()-.5);
+    S.gy     = S.pitch*0.85+1.5*(Math.random()-.5);
+    S.gz     = 1.5*Math.sin(demoT*.55);
+    const pa=S.alt;
+    S.alt    = 885+30*Math.sin(demoT*.22)+4*Math.random();
+    S.vspd   = (S.alt-pa)*10;
+    S.temp   = 22.6+0.3*Math.sin(demoT*.08);
+    S.pres   = 101325-S.alt*11.8;
+    S.channels=[
+      Math.round(1500+400*Math.sin(demoT*.55)),
+      Math.round(1500+200*Math.sin(demoT*.32)),
+      Math.round(1000+500*(0.5+0.5*Math.sin(demoT*.2))),
+      Math.round(1500+150*Math.sin(demoT*.7)),
+      1500,1500,1500,1500
+    ];
+    // Servo positions mirroring aileron control logic (GAIN=2.5)
+    const demoCorr = Math.round(Math.max(-70, Math.min(70, S.roll * 2.5)));
+    S.sg90 = Math.max(10, Math.min(170, 90 + demoCorr));
+    S.mg90 = Math.max(10, Math.min(170, 90 - demoCorr));
+    const now=Date.now();
+    S.loopHz=1000/(now-S.loopLast);S.loopLast=now;S.pktCount++;
+    updateUI();
+  },50);
+}
+
+/* ═══════════════════════════════════════
+   CLOCKS + TIMERS
+═══════════════════════════════════════ */
+function fmtTime(ms){
+  const s=Math.floor(ms/1000);
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sc).padStart(2,'0');
+}
+setInterval(()=>{
+  const now=new Date();
+  const ts=now.toLocaleTimeString();
+  document.getElementById('sb-time').innerHTML=ts+'<br>'+now.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  document.getElementById('hud-timer').textContent=S.flightStart?fmtTime(Date.now()-S.flightStart):'00:00:00';
+  document.getElementById('si-uptime').textContent=S.flightStart?fmtTime(Date.now()-S.flightStart):'00:00:00';
+},1000);
+
+/* ═══════════════════════════════════════
+   INIT
+═══════════════════════════════════════ */
+drawHdgArc(0);
+drawAdiMini(0,0);
+drawCompass(45);
+drawMap();
+drawControlSurface('cs-ail',0,'aileron',90);
+drawControlSurface('cs-ele',0,'elevator',90);
+drawControlSurface('cs-rud',0,'rudder',null);
+syslog('FGS Ground Station initialized');
+syslog('Waiting for serial connection…');
+</script>
+</body>
+</html>
